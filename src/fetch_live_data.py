@@ -49,5 +49,5 @@ df = df.rename(columns={
 
 df["value"] = df["value"] / 10  # convert to £m
 
-df.to_csv("fpl_2024_25_current.csv", index=False)
+df.to_csv("fpl_2025_26_current.csv", index=False)
 print(f"Saved {len(df)} rows")
