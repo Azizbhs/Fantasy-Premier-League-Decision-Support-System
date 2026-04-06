@@ -8,9 +8,9 @@ df3 = pd.read_csv('data/raw_live/raw_current.csv')
 
 # 2. Combine them
 # We add the season label just so the AI can distinguish trends over time
-df1['season'] = '2324'
-df2['season'] = '2425'
-df3['season'] = '2526'
+df1['season'] = 2324
+df2['season'] = 2425
+df3['season'] = 2526
 
 master_df = pd.concat([df1, df2, df3], ignore_index=True)
 
