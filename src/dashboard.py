@@ -8,6 +8,7 @@ import tensorflow as tf
 import autokeras as ak
 from sklearn.impute import SimpleImputer
 from pulp import *
+from difflib import get_close_matches
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
@@ -99,6 +100,48 @@ def fetch_user_squad(fpl_id, gw):
         return picks, itb
     except:
         return None, None
+    
+def match_squad_names(api_names, prediction_names):
+    """Match FPL API short names to full names in predictions dataframe."""
+    matched = []
+    pred_lower = {n.lower(): n for n in prediction_names}
+
+    # Build last-name lookup from predictions
+    last_name_map = {}
+    for n in prediction_names:
+        parts = n.split()
+        if parts:
+            last = parts[-1].lower()
+            if last not in last_name_map:
+                last_name_map[last] = n
+
+    for api_name in api_names:
+        api_lower = api_name.lower().strip()
+
+        # 1. Exact substring match (e.g. "Palmer" in "Cole Palmer")
+        exact = [n for n in prediction_names if api_lower in n.lower()]
+        if len(exact) == 1:
+            matched.append(exact[0])
+            continue
+
+        # 2. Last name match (e.g. "Leno" → "Bernd Leno")
+        if api_lower in last_name_map:
+            matched.append(last_name_map[api_lower])
+            continue
+
+        # 3. Handle "B.Fernandes" style — extract surname after dot
+        if '.' in api_lower:
+            surname = api_lower.split('.')[-1].strip()
+            if surname in last_name_map:
+                matched.append(last_name_map[surname])
+                continue
+
+        # 4. Fuzzy match as last resort with higher cutoff
+        close = get_close_matches(api_lower, list(pred_lower.keys()), n=1, cutoff=0.75)
+        if close:
+            matched.append(pred_lower[close[0]])
+
+    return matched
 
 # ── Load Models ────────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -149,8 +192,11 @@ def generate_predictions(_models):
     # Most recent GW row per player = current form snapshot
     latest = df.groupby('name').last().reset_index()
 
-    # Keep metadata
-    meta = latest[['name', 'team', 'position', 'value']].copy()
+    # Keep metadata including element ID for squad matching
+    meta_cols = ['name', 'team', 'position', 'value']
+    if 'element' in latest.columns:
+        meta_cols.append('element')
+    meta = latest[meta_cols].copy()
     if meta['position'].dtype == object:
         # Already strings — map directly
         str_map = {'GK': 'GK', 'DEF': 'DEF', 'MID': 'MID', 'FWD': 'FWD'}
@@ -288,6 +334,12 @@ def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
         prob += lpSum(tin[i]  for i in players) <= n_transfers
         prob += lpSum(tout[i] for i in players) <= n_transfers
         prob += lpSum(tin[i]  for i in players) == lpSum(tout[i] for i in players)
+
+        # Position-for-position constraint — transfers in must match position of transfers out
+        prob += lpSum(tin[i]  for i in gk_idx)  == lpSum(tout[i] for i in gk_idx)
+        prob += lpSum(tin[i]  for i in def_idx) == lpSum(tout[i] for i in def_idx)
+        prob += lpSum(tin[i]  for i in mid_idx) == lpSum(tout[i] for i in mid_idx)
+        prob += lpSum(tin[i]  for i in fwd_idx) == lpSum(tout[i] for i in fwd_idx)
         prob += lpSum(keep[i] + tin[i] for i in players) == 15
         prob += lpSum((keep[i] + tin[i]) * df.loc[i, 'value'] for i in players) <= budget
         prob += lpSum(keep[i] + tin[i] for i in gk_idx)  == 2
@@ -481,7 +533,11 @@ elif page == "👤 My Squad":
         # Text input — no annoying +/- buttons
         fpl_id_str     = st.text_input("Your FPL Team ID", value="", placeholder="e.g. 3187370",
                                         help="Find in FPL app under Points — it's in the URL")
-        free_transfers = st.selectbox("Free Transfers", [1, 2, "Wildcard"])
+        wildcard       = st.checkbox("Wildcard")
+        if not wildcard:
+            n_ft = st.number_input("Free Transfers", min_value=1, max_value=15, value=1, step=1)
+        else:
+            n_ft = 15
         fetch_btn      = st.button("🔍 Import & Optimise", type="primary")
 
     with c2:
@@ -504,13 +560,20 @@ elif page == "👤 My Squad":
                     if bootstrap is None:
                         st.error("Could not reach FPL API.")
                     else:
-                        id_to_name   = {p['id']: p['web_name'] for p in bootstrap['elements']}
-                        squad_names  = [id_to_name.get(pid, '') for pid in picks if id_to_name.get(pid)]
+                        # Build element ID → our player name map
+                        if 'element' in predictions.columns:
+                            elem_to_name = dict(zip(predictions['element'].astype(int), predictions['name']))
+                            squad_names  = [elem_to_name[pid] for pid in picks if pid in elem_to_name]
+                        else:
+                            # Fallback to name matching if element column not available
+                            id_to_name   = {p['id']: p['web_name'] for p in bootstrap['elements']}
+                            api_names    = [id_to_name.get(pid, '') for pid in picks if id_to_name.get(pid)]
+                            squad_names  = match_squad_names(api_names, predictions['name'].tolist())
                         current_df   = predictions[predictions['name'].isin(squad_names)]
                         total_budget = current_df['value'].sum() + itb
-                        n_transfers  = 15 if free_transfers == "Wildcard" else int(free_transfers)
+                        n_transfers  = n_ft
 
-                        st.markdown(f'<p style="color:#888;">✅ {len(squad_names)} players imported · Budget: £{total_budget:.1f}m · {free_transfers} transfer(s)</p>', unsafe_allow_html=True)
+                        st.markdown(f'<p style="color:#888;">✅ {len(squad_names)}/15 players matched · Budget: £{total_budget:.1f}m · {"Wildcard" if wildcard else str(n_ft) + " transfer(s)"}</p>', unsafe_allow_html=True)
 
                         with st.spinner("Running transfer optimisation..."):
                             result = optimise_squad(
@@ -550,6 +613,7 @@ elif page == "👤 My Squad":
 
                             st.markdown('<p class="section-header" style="font-size:1.2rem;margin-top:1.5rem;">OPTIMISED STARTING XI</p>', unsafe_allow_html=True)
                             display_squad(predictions, s_ids, b_ids, cap_id)
+    
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 4 — PLAYER PREDICTIONS
