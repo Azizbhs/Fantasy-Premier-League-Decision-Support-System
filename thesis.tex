@@ -1,0 +1,596 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                       CARREGA DE LA CLASSE DE DOCUMENT                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[11pt,english,listoffigures,listoftables]{tfgetsinf}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     CODIFICACIO DEL FITXER FONT                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Hyperref config
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\hypersetup{ colorlinks=true, linkcolor=black, urlcolor=cyan, citecolor=black }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                        DADES DEL TREBALL                                    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title{A Machine Learning-Based Decision Support System for Fantasy Premier League}
+\author{Ben Hassen, Mohamed Aziz}
+\tutor{Heras Barber\'{a}, Stella Mar\'{i}a}
+\curs{2025-2026}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                     PARAULES CLAU                                           %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\keywords{Fantasy Premier League, aprenentatge autom\`{a}tic, Python, Streamlit, optimitzaci\'{o} lineal, AutoML}
+         {Fantasy Premier League, aprendizaje autom\'{a}tico, Python, Streamlit, optimizaci\'{o}n lineal, AutoML}
+         {Fantasy Premier League, Machine Learning, Python, Streamlit, linear optimisation, AutoML}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                              INICI DEL DOCUMENT                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                              ABSTRACTS                                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{abstract}
+La Fantasy Premier League (FPL) \'{e}s un joc d'estrat\`{e}gia de futbol jugat per m\'{e}s de deu milions de persones a tot el m\'{o}n, on l'\`{e}xit dep\`{e}n de predir el rendiment dels jugadors en condicions d'alta incertesa. Aquesta tesi presenta el desenvolupament d'un Sistema de Suport a la Decisi\'{o} (DSS) basat en aprenentatge autom\`{a}tic, dissenyat per ajudar els usuaris a optimitzar les seues plantilles i superar biaixos humans comuns com el biaix de recentesa.
+
+El sistema implementa una canonada de dades completa sobre tres temporades de la Premier League (2023--2026), aplicant enginyeria de caracter\'{i}stiques per generar m\'{e}s de quinze variables predictives. Per al motor de predicci\'{o}, es comparen t\`{e}cniques d'AutoML mitjan\c{c}ant PyCaret --- que avalua autom\`{a}ticament m\'{e}s de vint models de regressi\'{o} --- contra xarxes neuronals profundes construïdes amb AutoKeras. El model guanyador \'{e}s el Huber Regressor, amb un MAE de 0,797, representant una millora del 45\% sobre la l\'{i}nia base na\"{i}f. Les prediccions s'integren en un optimitzador de plantilles basat en PuLP que formula la selecci\'{o} de jugadors com un problema de la motxilla amb m\'{u}ltiples restriccions. Finalment, el sistema es desplegui com una aplicaci\'{o} web interactiva amb Streamlit, que permet als usuaris importar la seua plantilla actual mitjan\c{c}ant l'identificador de la FPL i rebre recomanacions de fitxatges \'{o}ptimes.
+\end{abstract}
+
+\begin{abstract}[spanish]
+La Fantasy Premier League (FPL) es un juego de estrategia de f\'{u}tbol jugado por m\'{a}s de diez millones de personas en todo el mundo, donde el \'{e}xito depende de predecir el rendimiento de los jugadores en condiciones de alta incertidumbre. Esta tesis presenta el desarrollo de un Sistema de Soporte a la Decisi\'{o}n (DSS) basado en aprendizaje autom\'{a}tico, dise\~{n}ado para ayudar a los usuarios a optimizar sus plantillas y superar sesgos humanos comunes como el sesgo de actualidad.
+
+El sistema implementa una canalizaci\'{o}n de datos completa sobre tres temporadas de la Premier League (2023--2026), aplicando ingenier\'{i}a de caracter\'{i}sticas para generar m\'{a}s de quince variables predictivas. Para el motor de predicci\'{o}n, se comparan t\'{e}cnicas de AutoML mediante PyCaret --- que eval\'{u}a autom\'{a}ticamente m\'{a}s de veinte modelos de regresi\'{o}n --- contra redes neuronales profundas construidas con AutoKeras. El modelo ganador es el Huber Regressor, con un MAE de 0,797, representando una mejora del 45\% sobre la l\'{i}nea base na\"{i}f. Las predicciones se integran en un optimizador de plantillas basado en PuLP que formula la selecci\'{o}n de jugadores como un problema de la mochila con m\'{u}ltiples restricciones. Finalmente, el sistema se despliega como una aplicaci\'{o}n web interactiva con Streamlit, que permite a los usuarios importar su plantilla actual mediante el identificador de la FPL y recibir recomendaciones de fichajes \'{o}ptimas.
+\end{abstract}
+
+\begin{abstract}[english]
+Fantasy Premier League (FPL) is a strategy football game played by over ten million people worldwide, where success depends on predicting player performance under high uncertainty. This thesis presents the development of a Machine Learning-based Decision Support System (DSS) designed to assist users in optimising their squads and overcoming common human biases such as recency bias.
+
+The system implements a complete data pipeline spanning three Premier League seasons (2023--2026), applying feature engineering to generate over fifteen predictive variables. For the prediction engine, AutoML techniques via PyCaret --- which automatically benchmarks over twenty regression models --- are compared against deep neural networks built with AutoKeras. The winning model is the Huber Regressor, achieving a Mean Absolute Error of 0.797 and representing a 45\% improvement over the na\"{i}ve baseline. Predictions are integrated into a PuLP-based squad optimiser that formulates player selection as a multi-constraint knapsack problem. The system is deployed as an interactive Streamlit web application, allowing users to import their current squad via their FPL ID and receive mathematically optimal transfer recommendations.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                              CONTINGUT DEL TREBALL                         %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\mainmatter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                CHAPTER 1: INTRODUCTION                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Introduction}
+
+Fantasy Premier League (FPL) is the official fantasy football game of the English Premier League, attracting over ten million participants across 190 countries each season \cite{fpl_official}. Each manager selects a squad of fifteen players within a £100 million budget and earns points based on real-world statistical performance: goals, assists, clean sheets, saves, and bonus points. Decisions must be made weekly under strict constraints --- budget limits, positional requirements, and a maximum of three players from the same club --- while new information about injuries, fixtures, and form continuously changes the optimal choice.
+
+Despite its competitive nature, most FPL managers rely heavily on human intuition, recency bias, and community consensus rather than systematic, data-driven analysis. A player who scored twenty points in the previous gameweek is often blindly captained the following week, even when statistical evidence suggests this is unlikely to repeat. Conversely, players with consistently high expected output are overlooked simply because they are unfamiliar or unfashionable. These cognitive biases have been well-documented in behavioural economics and present a clear opportunity for machine learning intervention.
+
+This project addresses this gap by building an end-to-end Decision Support System that replaces intuition with a mathematically rigorous, automated pipeline. The system fetches and engineers a multi-season dataset, trains an ensemble of machine learning models to predict player points, and formulates squad selection as a constrained optimisation problem solved by linear programming.
+
+\section{Motivation}
+
+The motivation for this project emerges from two converging interests: the widespread popularity of FPL as a competitive data-rich game, and the growing availability of tools for automated machine learning and mathematical optimisation.
+
+FPL generates a uniquely rich dataset. Every gameweek, hundreds of players accumulate granular statistics --- minutes played, shots, expected goals, bonus points, prices, transfers --- across a structured competitive environment with well-defined scoring rules. This makes it an ideal testbed for supervised learning: the target variable (next gameweek points) is clearly defined, historical data is abundant, and the downstream application (squad selection) is concrete.
+
+At the same time, tools such as PyCaret and AutoKeras have significantly lowered the barrier to building and comparing multiple ML models systematically. Rather than manually tuning a single algorithm, AutoML frameworks allow a rigorous benchmark across many model families in a fraction of the time. Combined with PuLP for integer linear programming, these tools make it feasible to build a complete DSS within the scope of a final degree project.
+
+From a personal perspective, FPL is a game where the author competes regularly, and the frustration of making suboptimal decisions based on gut feeling provided a direct real-world motivation. The project also aligns naturally with the Computación specialisation, combining supervised learning, optimisation theory, and software engineering into a unified system.
+
+\section{Objectives}
+
+The primary objective of this project is to develop a functional, data-driven Decision Support System for Fantasy Premier League that demonstrably outperforms naive baseline predictions and provides actionable recommendations to real users.
+
+This primary objective decomposes into the following specific objectives:
+
+\begin{enumerate}
+    \item \textbf{Data Engineering:} Construct a clean, multi-season dataset (2023--2026) from publicly available FPL statistics, covering over 820 active players across three Premier League seasons.
+
+    \item \textbf{Feature Engineering:} Design and implement at least fifteen predictive features capturing player form, match context, value efficiency, opponent strength, and consistency.
+
+    \item \textbf{Predictive Modelling:} Train and compare multiple regression models using AutoML (PyCaret) and deep learning (AutoKeras), evaluating performance against a naïve baseline using MAE and R² metrics.
+
+    \item \textbf{Ensemble Prediction with Uncertainty Quantification:} Combine the best-performing models into a weighted ensemble and generate prediction intervals (Low/Mid/High) with associated confidence levels.
+
+    \item \textbf{Squad Optimisation:} Formulate FPL squad selection as a multi-constraint knapsack problem and implement a PuLP-based integer linear programme that selects the mathematically optimal squad given a budget and formation constraints.
+
+    \item \textbf{Interactive Dashboard:} Deploy the system as a Streamlit web application that allows users to import their current FPL squad via their team ID and receive personalised transfer and captaincy recommendations.
+\end{enumerate}
+
+\section{Structure of the Report}
+
+The remainder of this document is organised as follows. Chapter~\ref{chap:stateoftheart} surveys relevant prior work in football analytics, fantasy sports prediction, and the specific techniques employed. Chapter~\ref{chap:design} describes the system architecture, data pipeline, and design decisions. Chapter~\ref{chap:development} details the implementation of each component. Chapter~\ref{chap:results} presents and discusses the experimental results. Chapter~\ref{chap:conclusions} summarises the conclusions and proposes directions for future work.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                          CHAPTER 2: STATE OF THE ART                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{State of the Art}
+\label{chap:stateoftheart}
+
+\section{Football Analytics and Player Performance Prediction}
+
+The application of machine learning to football analytics has grown substantially over the past decade, driven by the increasing availability of granular event data from providers such as Opta and StatsBomb. Early work focused on predicting match outcomes using logistic regression and Bayesian models \cite{dixon_coles}. More recent approaches have extended these methods to individual player performance prediction, which is more relevant to the FPL context.
+
+Expected goals (xG) models, popularised in academic and practitioner communities alike, provide a principled statistical framework for evaluating attacking contribution independent of finishing luck \cite{xg_model}. These models estimate the probability of a shot resulting in a goal based on shot location, type, and game state. The FPL dataset includes pre-computed xG values from the Premier League data feed, which form one of the predictive features in this project.
+
+Regarding FPL-specific prediction, several academic studies and open-source projects have demonstrated the feasibility of machine learning approaches. Bonomo et al. \cite{bonomo} applied linear programming to FPL squad selection, framing the problem as a variant of the knapsack problem with multiple constraints. Their work established the mathematical foundations that this project builds upon, extending the approach with data-driven point predictions rather than manually defined values.
+
+\section{AutoML and Automated Model Selection}
+
+Automated Machine Learning (AutoML) refers to the process of automating the end-to-end application of machine learning, from data preprocessing to model selection and hyperparameter tuning. The field has grown rapidly in response to the practical challenge of selecting among a large number of possible model architectures and configurations.
+
+PyCaret \cite{pycaret} is an open-source, low-code Python library that automates the comparison of over twenty regression and classification algorithms within a unified framework. It handles data preprocessing (imputation, scaling, outlier removal), cross-validation, and model ranking automatically, making it particularly well-suited for benchmarking studies. AutoKeras \cite{autokeras} extends the AutoML paradigm to deep learning, using neural architecture search (NAS) to automatically design and tune neural network structures for structured data.
+
+The combination of these two frameworks allows this project to rigorously compare traditional machine learning approaches against deep learning without requiring extensive manual architecture design --- a key methodological contribution of this work.
+
+\section{Mathematical Optimisation for Squad Selection}
+
+The FPL squad selection problem belongs to the family of combinatorial optimisation problems. Given a set of $n$ players, each with a predicted score $p_i$ and cost $c_i$, the objective is to select a subset maximising total predicted score subject to budget and structural constraints. This is formally analogous to the 0-1 knapsack problem, which is NP-hard in general but tractable for typical FPL instances using integer linear programming.
+
+PuLP \cite{pulp} is a Python library for linear and integer programming that interfaces with solvers including the open-source CBC solver. It provides a declarative modelling interface where constraints and objectives are expressed algebraically, enabling clean and maintainable formulations of complex optimisation problems.
+
+\section{Existing FPL Tools and Comparison}
+
+Several tools exist that address parts of the FPL decision-making problem. Table~\ref{tab:comparison} presents a comparison of this project against two representative existing solutions.
+
+\begin{table}[h]
+\centering
+\caption{Comparison of FPL Decision Support Tools}
+\label{tab:comparison}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Feature} & \textbf{This Project} & \textbf{FPL Review \cite{fplreview}} & \textbf{fplbot \cite{fplbot}} \\
+\midrule
+Multi-season data & \checkmark (3 seasons) & \checkmark & $\times$ \\
+AutoML benchmarking & \checkmark & $\times$ & $\times$ \\
+Deep learning & \checkmark (AutoKeras) & $\times$ & $\times$ \\
+Mathematical optimisation & \checkmark (PuLP ILP) & Partial & $\times$ \\
+Prediction intervals & \checkmark & $\times$ & $\times$ \\
+FPL ID squad import & \checkmark & \checkmark & \checkmark \\
+Transfer optimisation & \checkmark & \checkmark & $\times$ \\
+Open source & \checkmark & $\times$ & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+FPL Review is a widely used commercial tool that provides expected points and transfer suggestions, but does not expose its underlying models or methodology. The fplbot project provides automated notifications but lacks predictive modelling. This project is distinctive in combining a transparent, reproducible AutoML pipeline with mathematical squad optimisation and an interactive deployment --- providing a complete, open-source DSS that addresses the full decision workflow.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                        CHAPTER 3: DESIGN                                    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{System Design}
+\label{chap:design}
+
+\section{System Architecture}
+
+The system is designed as a four-stage pipeline, illustrated conceptually below. Each stage produces a well-defined output that feeds the next, enabling independent development, testing, and replacement of individual components.
+
+\begin{enumerate}
+    \item \textbf{Data Pipeline:} Raw historical CSV files from the vaastav/Fantasy-Premier-League repository \cite{vaastav} are combined with current season data. The pipeline produces a cleaned, season-labelled master dataset.
+    \item \textbf{Feature Engineering:} The master dataset is enriched with fifteen engineered features capturing form, value, match context, and consistency. Output: \texttt{featured\_training\_set.csv}.
+    \item \textbf{Predictive Modelling:} Three models (Huber Regressor, LightGBM, AutoKeras neural network) are trained on historical data and used to generate a weighted ensemble prediction for the next gameweek. Output: prediction scores per player.
+    \item \textbf{Optimisation and Dashboard:} Predictions feed a PuLP integer linear programme that selects the optimal squad. The entire system is deployed as a Streamlit dashboard with live FPL API integration.
+\end{enumerate}
+
+\section{Data Sources and Collection}
+
+\subsection{Historical Data}
+
+Player statistics for the 2023/24 and 2024/25 seasons were obtained from the vaastav/Fantasy-Premier-League open dataset \cite{vaastav}, which mirrors the official FPL API and provides per-gameweek statistics for every player. This source was chosen over direct API extraction due to its consistency, completeness, and well-documented schema.
+
+\subsection{Current Season Data}
+
+Statistics for the 2025/26 season (Gameweeks 1--29) were also sourced from the vaastav repository, ensuring consistent naming conventions and column schemas across all seasons. The FPL official API (\texttt{fantasy.premierleague.com/api/}) is used exclusively at runtime for: (i) fetching fixture difficulty ratings for upcoming gameweeks, and (ii) importing user squad data via their FPL team identifier.
+
+\subsection{Data Integration}
+
+The three season datasets are concatenated into a single master dataset after adding integer season labels (2324, 2425, 2526). Players are filtered to include only those active in the 2025/26 season, avoiding predictions for retired or departed players. Player prices are standardised by dividing raw values by ten to convert to millions of pounds. A match result feature (win=3, draw=1, loss=0) is derived from home and away scores.
+
+The final dataset contains 52,608 player-gameweek observations covering 820 unique players.
+
+\section{Feature Engineering Design}
+
+Fifteen features were engineered across six categories, designed to capture the key signals an experienced FPL manager would consider when evaluating a player:
+
+\subsection{Form and Momentum}
+\begin{itemize}
+    \item \texttt{rolling\_pts\_3}: Rolling average points over the last three gameweeks (shift-1 applied to prevent data leakage).
+    \item \texttt{rolling\_pts\_5}: Rolling average points over the last five gameweeks.
+    \item \texttt{rolling\_mins\_3}: Rolling average minutes played over the last three gameweeks.
+    \item \texttt{rolling\_gi\_3}: Rolling average goal involvements (goals + assists) over three gameweeks.
+\end{itemize}
+
+\subsection{Value and Efficiency}
+\begin{itemize}
+    \item \texttt{pts\_per\_million}: Total points divided by player price, measuring cost-effectiveness.
+    \item \texttt{price\_change}: Week-on-week price differential, indicating transfer market sentiment.
+\end{itemize}
+
+\subsection{Match Context}
+\begin{itemize}
+    \item \texttt{was\_home}: Binary indicator of home fixture.
+    \item \texttt{team\_match\_result}: Win/draw/loss result (3/1/0).
+    \item \texttt{opp\_avg\_goals\_scored}: Rolling five-gameweek average of opponent's goals scored (proxy for attacking threat faced by defenders and goalkeepers).
+    \item \texttt{opp\_avg\_goals\_conceded}: Rolling five-gameweek average of opponent's goals conceded (proxy for clean sheet probability).
+\end{itemize}
+
+\subsection{Consistency Flags}
+\begin{itemize}
+    \item \texttt{played\_60\_plus}: Binary indicator of playing 60 or more minutes (FPL full appearance threshold).
+    \item \texttt{blanked}: Binary indicator of scoring one or fewer points (blank gameweek flag).
+\end{itemize}
+
+\subsection{Position-Specific Features}
+\begin{itemize}
+    \item \texttt{games\_played}: Cumulative games played in the current season.
+    \item \texttt{gi\_rate}: Goal involvement rate (goal involvements divided by games played).
+\end{itemize}
+
+\subsection{Disciplinary Risk}
+\begin{itemize}
+    \item \texttt{rolling\_yellows\_3}: Rolling average yellow cards over three gameweeks (booking risk).
+    \item \texttt{red\_card\_flag}: Binary indicator of a red card in the current gameweek (signals likely absence in the following match).
+\end{itemize}
+
+A shift of one gameweek is applied to all rolling features before computing the window, ensuring that each row's features describe the player's state entering that gameweek rather than within it. This prevents data leakage and ensures the model learns genuinely predictive patterns.
+
+\section{Train/Test Split Strategy}
+
+A time-aware walk-forward split is applied rather than a random shuffle, reflecting the temporal nature of the prediction task. Random splitting would allow the model to train on future gameweeks and test on earlier ones, constituting a form of data leakage that would artificially inflate performance metrics.
+
+\begin{itemize}
+    \item \textbf{Training set:} All of the 2023/24 and 2024/25 seasons, plus Gameweeks 1--25 of the 2025/26 season (48,399 observations).
+    \item \textbf{Test set:} Gameweeks 26--29 of the 2025/26 season (2,533 observations).
+\end{itemize}
+
+The inclusion of early 2025/26 gameweeks in the training set is a deliberate design choice: it allows the model to learn current-season pricing, team compositions, and player roles, which differ substantially from previous seasons due to summer transfers.
+
+\section{Optimisation Problem Formulation}
+
+The squad selection problem is formulated as a binary integer linear programme. Let $I$ denote the set of available players, and define binary decision variables $x_i \in \{0,1\}$ (starter), $b_i \in \{0,1\}$ (benched), and $c_i \in \{0,1\}$ (captain) for each player $i \in I$.
+
+The objective is to maximise total predicted points for the starting eleven, including the captain bonus (captain scores double points):
+
+\begin{equation}
+\text{maximise} \quad \sum_{i \in I} x_i \cdot \hat{p}_i + \sum_{i \in I} c_i \cdot \hat{p}_i
+\end{equation}
+
+subject to the following constraints:
+
+\begin{align}
+\sum_{i \in I} x_i &= 11 \quad \text{(11 starters)} \\
+\sum_{i \in I} b_i &= 4 \quad \text{(4 bench players)} \\
+x_i + b_i &\leq 1 \quad \forall i \in I \quad \text{(starter or bench, not both)} \\
+c_i &\leq x_i \quad \forall i \in I \quad \text{(captain must start)} \\
+\sum_{i \in I} c_i &= 1 \quad \text{(exactly one captain)} \\
+\sum_{i \in I} (x_i + b_i) \cdot v_i &\leq 100.0 \quad \text{(£100m budget)} \\
+\sum_{i \in GK} (x_i + b_i) &= 2, \quad \sum_{i \in GK} x_i = 1 \\
+\sum_{i \in DEF} (x_i + b_i) &= 5, \quad \sum_{i \in DEF} x_i \geq 3 \\
+\sum_{i \in MID} (x_i + b_i) &= 5, \quad \sum_{i \in MID} x_i \geq 2 \\
+\sum_{i \in FWD} (x_i + b_i) &= 3, \quad \sum_{i \in FWD} x_i \geq 1 \\
+\sum_{i \in C_k} (x_i + b_i) &\leq 3 \quad \forall k \quad \text{(max 3 per club)}
+\end{align}
+
+where $\hat{p}_i$ is the scaled predicted score for player $i$, $v_i$ is the player's price, and $C_k$ denotes the set of players belonging to club $k$.
+
+For transfer optimisation, additional binary variables $t^+_i$ (transfer in) and $t^-_i$ (transfer out) are introduced, with constraints ensuring position-balance is maintained across transfers and the number of transfers does not exceed the available free transfers.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                        CHAPTER 4: DEVELOPMENT                               %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Implementation}
+\label{chap:development}
+
+\section{Technology Stack}
+
+The system is implemented entirely in Python 3.10. Table~\ref{tab:tools} summarises the key libraries and tools employed, along with the justification for each choice.
+
+\begin{table}[h]
+\centering
+\caption{Technology Stack and Justification}
+\label{tab:tools}
+\begin{tabular}{lll}
+\toprule
+\textbf{Library} & \textbf{Version} & \textbf{Justification} \\
+\midrule
+pandas & 2.1.4 & Industry-standard tabular data manipulation \\
+numpy & 1.26.4 & Numerical computing foundation \\
+scikit-learn & 1.4.2 & ML utilities, imputation, metrics \\
+PyCaret & 3.3.2 & AutoML benchmarking of 20+ models \\
+AutoKeras & 3.0.0 & Automated neural architecture search \\
+TensorFlow & 2.18.0 & Deep learning backend for AutoKeras \\
+LightGBM & 4.6.0 & Gradient boosting with GPU support \\
+PuLP & 3.3.0 & Integer linear programming (CBC solver) \\
+Streamlit & 1.56.0 & Interactive web dashboard deployment \\
+requests & -- & FPL API integration \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Training was performed on Google Colab using a T4 GPU (runtime version 2025.07, Python 3.10). The GPU was primarily utilised by LightGBM (via CUDA) and AutoKeras (via TensorFlow). PyCaret required a separate runtime session due to dependency conflicts with AutoKeras's TensorFlow requirements --- a known compatibility issue between PyCaret's pinned numpy/scikit-learn versions and TensorFlow's requirements.
+
+\section{Data Pipeline Implementation}
+
+The data pipeline consists of two sequential scripts. \texttt{filter\_data.py} loads and concatenates the three season CSV files, applies the price normalisation (dividing raw integer values by ten), computes the match result feature, and filters to retain only current-season active players. \texttt{feature\_engineering.py} then computes all fifteen engineered features using Pandas groupby and rolling window operations, with a one-gameweek shift applied to prevent leakage.
+
+A key implementation decision was the use of integer season labels (2324, 2425, 2526) rather than string labels, which prevented a subtle bug in the walk-forward split where Pandas mask operations on string comparisons failed to match correctly.
+
+\section{Predictive Modelling}
+
+\subsection{Target Variable}
+
+The target variable is the total FPL points scored by a player in the \emph{next} gameweek. This is implemented by applying a one-position forward shift within each player-season group:
+
+\begin{equation}
+y_i^{(t)} = \text{total\_points}_i^{(t+1)}
+\end{equation}
+
+Rows where the target is undefined (final gameweek of each season) are dropped, resulting in 50,932 training observations.
+
+\subsection{Missing Value Handling}
+
+Missing values arise naturally in rolling features for early gameweeks (no prior history to roll over). PyCaret handles these automatically via mean imputation during its setup phase. For AutoKeras, which does not perform automatic imputation, a \texttt{sklearn.impute.SimpleImputer} with mean strategy is fitted on the training set and applied to both training and test sets before neural network training.
+
+\subsection{PyCaret AutoML Benchmarking}
+
+PyCaret's \texttt{compare\_models} function was configured to evaluate all available regression algorithms using five-fold cross-validation, sorted by Mean Absolute Error. The \texttt{ransac} estimator was excluded due to known instability on this data type. The top three models were retained for ensemble construction, and the best model (Huber Regressor) was subsequently tuned with twenty iterations of random search over its hyperparameter space.
+
+The Huber Regressor's superior performance on MAE is attributable to its robustness to outliers: it applies a quadratic loss for errors below a threshold $\epsilon$ and a linear loss for larger errors, preventing the large point hauls (15+ points) from dominating the loss function and biasing predictions towards extreme values.
+
+\subsection{AutoKeras Neural Architecture Search}
+
+AutoKeras's \texttt{StructuredDataRegressor} was configured to search over ten architectures with fifty training epochs each, using validation loss as the search objective. The architecture search explored variations in network depth, layer width, dropout rates, and activation functions. Trial results were persisted to Google Drive to allow recovery after session disconnections. The best architecture was exported as a standard Keras model and saved in the \texttt{.keras} format.
+
+\subsection{Weighted Ensemble}
+
+The final prediction for each player is a weighted average of the three model outputs:
+
+\begin{equation}
+\hat{p}_i = 0.2 \cdot \hat{p}_i^{\text{Huber}} + 0.3 \cdot \hat{p}_i^{\text{LightGBM}} + 0.5 \cdot \hat{p}_i^{\text{AutoKeras}}
+\end{equation}
+
+Weights were assigned based on each model's R² score on the test set. AutoKeras receives the highest weight (0.5) due to its superior R² of 0.349, reflecting its better ability to capture the variance in high-scoring player performances --- the primary target for FPL optimisation. Huber receives the lowest weight (0.2) despite its best MAE, as its robustness to outliers comes at the cost of underestimating premium player hauls.
+
+Prediction intervals are derived from the standard deviation across the three model predictions:
+
+\begin{align}
+\hat{p}_i^{\text{mid}} &= \text{ensemble mean} \\
+\hat{p}_i^{\text{low}} &= \max(0, \hat{p}_i^{\text{mid}} - \sigma_i) \\
+\hat{p}_i^{\text{high}} &= \hat{p}_i^{\text{mid}} + \sigma_i
+\end{align}
+
+where $\sigma_i$ is the standard deviation across the three model predictions. Confidence labels (High/Medium/Low) are assigned by tertile bucketing of the interval width.
+
+\subsection{Price-Weighted Scaling for Optimisation}
+
+A known limitation of regression models on skewed distributions is regression to the mean: models trained on data where most players score 0--3 points tend to predict conservatively for premium assets. To partially correct for this, the predicted points used in the optimisation objective are scaled by a blend of the model prediction and a price signal:
+
+\begin{equation}
+\hat{p}_i^{\text{scaled}} = 0.4 \cdot \hat{p}_i^{\text{mid}} + 0.6 \cdot \frac{v_i}{v_{\max}} \cdot \max(\hat{p}^{\text{mid}})
+\end{equation}
+
+This scaling ensures that expensive premium players are not systematically undervalued in the optimisation relative to cheaper budget options who score similarly in raw predictions.
+
+\section{Dashboard Implementation}
+
+The Streamlit dashboard is structured as a five-page application:
+
+\begin{itemize}
+    \item \textbf{Overview:} Key system metrics and the model comparison chart.
+    \item \textbf{Best Squad:} Runs the PuLP optimiser live and displays the mathematically optimal starting eleven and bench.
+    \item \textbf{My Squad:} Fetches the user's current squad from the FPL public API using their numeric team identifier, matches players to the predictions database using element IDs (avoiding name-matching ambiguity), computes the available budget, and runs a transfer-constrained optimisation.
+    \item \textbf{Player Predictions:} A filterable table of all 820 players ranked by predicted points, with position, confidence, price, and interval filters.
+    \item \textbf{Captain Picks:} Top ten captaincy recommendations with double-points projections.
+    \item \textbf{Fixtures:} Upcoming gameweek fixtures fetched live from the FPL API, displaying home/away teams with Fixture Difficulty Ratings (FDR).
+\end{itemize}
+
+Player matching between the FPL API (which uses short web names such as ``B.Fernandes'') and the predictions database is performed using FPL element IDs, which are consistent between the vaastav dataset and the official API. This eliminates the name ambiguity that caused incorrect squad identification in early development iterations.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                          CHAPTER 5: RESULTS                                 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Results and Discussion}
+\label{chap:results}
+
+\section{Model Benchmarking Results}
+
+Table~\ref{tab:results} presents the test set performance of the three models and the naïve baseline. All metrics are computed on the holdout test set comprising Gameweeks 26--29 of the 2025/26 season (2,533 player-gameweek observations), which were not used in training.
+
+\begin{table}[h]
+\centering
+\caption{Model Performance on Holdout Test Set (GW26--29, 2025/26)}
+\label{tab:results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{MAE} & \textbf{R²} & \textbf{vs Baseline} \\
+\midrule
+Naïve Baseline (mean) & 1.448 & --- & --- \\
+Huber Regressor & \textbf{0.797} & 0.239 & $-44.9\%$ \\
+LightGBM & 0.930 & 0.328 & $-35.7\%$ \\
+AutoKeras Neural Network & 0.904 & \textbf{0.349} & $-37.6\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The naïve baseline predicts every player's score as the global mean (approximately 1.45 points per gameweek), representing the simplest possible approach. All three trained models substantially outperform this baseline, with the Huber Regressor achieving the best MAE at 0.797 --- a 45\% reduction in average prediction error.
+
+The split in performance metrics is noteworthy: Huber leads on MAE while AutoKeras leads on R². This divergence reflects the different loss functions implicitly optimised by each approach. Huber's linear loss for large errors makes it robust to the extreme values in the FPL distribution (hauls of 15+ points), resulting in lower average error but at the cost of explaining less variance. AutoKeras, trained to minimise mean squared error on the validation set, is penalised more heavily for missing large hauls and therefore allocates more predictive capacity to identifying them --- resulting in higher R² but larger average errors on the many zero-point blanks.
+
+\section{Cross-Validation Stability}
+
+The Huber Regressor's five-fold cross-validation results showed a mean MAE of 1.018 with a standard deviation of 0.017, indicating high consistency across folds. The low standard deviation confirms that the model's performance is stable and not dependent on a particular data split. Notably, the test MAE (0.797) is lower than the cross-validation MAE (1.018), suggesting that the walk-forward split's inclusion of early 2025/26 data in training was beneficial, as the model could learn current-season patterns.
+
+\section{Optimisation Results}
+
+The PuLP solver consistently finds the optimal solution within two seconds on a standard laptop (Intel Core i5, 8GB RAM). The optimal squad for Gameweek 32 (predicted using GW29 feature snapshots) allocates the full £100m budget and selects a formation that balances predicted points across positions. The captain selection (highest scaled predicted score) consistently identifies premium assets in good form, which aligns with established FPL strategy.
+
+\section{Discussion of Limitations}
+
+Several limitations of the current system merit explicit acknowledgement, as they inform both the interpretation of results and the direction of future work.
+
+\textbf{Regression to the mean:} The ensemble predictions are systematically conservative, with all three models predicting most players below two points per gameweek. This is an expected consequence of training on a heavily right-skewed distribution where the majority of observations are zero or one point. The price-weighted scaling partially corrects for this but introduces a heuristic dependency on price as a quality proxy.
+
+\textbf{Injury and availability:} The system does not incorporate real-time injury or availability data. A player with a 25\% chance of playing may receive the same predicted score as a fully fit equivalent, potentially leading to suboptimal transfer recommendations. This information is available from the FPL API but was not integrated due to name-matching complexity between the API and vaastav data sources.
+
+\textbf{Fixture difficulty:} While opponent strength features are included in the training data, the optimisation does not explicitly filter players based on upcoming fixture difficulty. A player facing a top-six opponent in Gameweek 32 may be selected over a player with a significantly easier fixture.
+
+\textbf{Temporal gap:} The training data extends to Gameweek 29, while GW32 is being predicted. The two-gameweek gap (GW30--31) means the model's rolling features do not capture the most recent form, though this is a practical limitation rather than a methodological flaw.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                         CHAPTER 6: CONCLUSIONS                              %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\chapter{Conclusions}
+\label{chap:conclusions}
+
+\section{Summary of Achievements}
+
+This project has successfully developed and deployed a complete, end-to-end Decision Support System for Fantasy Premier League, fulfilling all six specific objectives set out in Chapter~1.
+
+A multi-season dataset of 52,608 player-gameweek observations was engineered from three Premier League seasons, with fifteen predictive features capturing the key signals relevant to FPL decision-making. The AutoML benchmarking pipeline evaluated over twenty regression algorithms, identifying the Huber Regressor as the optimal model with a test MAE of 0.797 --- representing a 45\% improvement over the naïve baseline. The comparison with AutoKeras yielded an important finding: traditional ML outperforms deep learning on average accuracy (MAE), while deep learning better captures variance in extreme outcomes (R²). This motivates the weighted ensemble approach, which combines the complementary strengths of both paradigms.
+
+The PuLP-based optimiser correctly formulates and solves the FPL squad selection problem as a multi-constraint integer linear programme, producing an optimal squad within seconds. The Streamlit dashboard provides an accessible, interactive interface that allows real FPL managers to import their squad and receive data-driven transfer recommendations --- demonstrating the system's practical utility beyond the academic context.
+
+\section{Future Work}
+
+Several directions would meaningfully extend the capabilities of the system:
+
+\begin{itemize}
+    \item \textbf{Real-time injury integration:} Incorporating player availability percentages from the FPL API would prevent the selection of injured or doubtful players, directly improving the practical quality of recommendations.
+
+    \item \textbf{Fixture-aware optimisation:} Adding upcoming fixture difficulty as an explicit constraint or objective component would capture the well-known FPL strategy of targeting players with easy fixtures.
+
+    \item \textbf{Differential captaincy strategy:} Modelling the trade-off between expected-value captaincy (highest predicted scorer) and differential captaincy (high-scoring player owned by few rivals) would add strategic depth to the captaincy recommendations.
+
+    \item \textbf{Season-to-season retraining:} Automating the retraining pipeline at the start of each new season, with automatic data fetching from the vaastav repository, would allow the system to remain current without manual intervention.
+
+    \item \textbf{Improved distribution modelling:} Replacing point-prediction regression with probabilistic models (e.g. quantile regression or Bayesian approaches) would provide better-calibrated prediction intervals and address the regression-to-mean limitation more rigorously.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                BIBLIOGRAFIA                                 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{thebibliography}{10}
+
+\bibitem{fpl_official}
+   Fantasy Premier League.
+   \newblock Official Fantasy Premier League website.
+   \newblock Retrieved from \url{https://fantasy.premierleague.com}.
+
+\bibitem{dixon_coles}
+   Mark~Dixon and Stuart~Coles.
+   \newblock Modelling association football scores and inefficiencies in the football betting market.
+   \newblock \textit{Journal of the Royal Statistical Society: Series C (Applied Statistics)}, 46(2):265--280, 1997.
+
+\bibitem{xg_model}
+   Lucey, P., Bialkowski, A., Monfort, M., Carr, P., and Matthews, I.
+   \newblock Quality vs quantity: Improved shot prediction in soccer using strategic features from spatiotemporal data.
+   \newblock In \textit{Proceedings of the 8th Annual MIT Sloan Sports Analytics Conference}, 2014.
+
+\bibitem{bonomo}
+   Fabi\'{a}n~Bonomo, Gast\'{o}n~Dur\'{a}n, Javier~Marenco, and Alejandro~Saporiti.
+   \newblock Mathematical programming contributions to soccer fantasy leagues.
+   \newblock \textit{4OR}, 12(3):305--322, 2014.
+
+\bibitem{pycaret}
+   Moez~Ali.
+   \newblock PyCaret: An open source, low-code machine learning library in Python.
+   \newblock PyCaret version 3.3.2, 2020.
+   \newblock Retrieved from \url{https://www.pycaret.org}.
+
+\bibitem{autokeras}
+   Haifeng~Jin, Qingquan~Song, and Xia~Hu.
+   \newblock Auto-Keras: An Efficient Neural Architecture Search System.
+   \newblock In \textit{Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining}, pages 1946--1956, 2019.
+
+\bibitem{pulp}
+   Stuart~Mitchell, Michael~OSullivan, and Iain~Dunning.
+   \newblock PuLP: A Linear Programming Toolkit for Python.
+   \newblock The University of Auckland, Auckland, New Zealand, 2011.
+   \newblock Retrieved from \url{https://coin-or.github.io/pulp/}.
+
+\bibitem{vaastav}
+   Vaastav~Anand.
+   \newblock Fantasy-Premier-League: A dataset of FPL player statistics.
+   \newblock GitHub repository, 2024.
+   \newblock Retrieved from \url{https://github.com/vaastav/Fantasy-Premier-League}.
+
+\bibitem{fplreview}
+   FPL Review.
+   \newblock FPL Review: Expected points and transfer planning tool.
+   \newblock Retrieved from \url{https://fplreview.com}.
+
+\bibitem{fplbot}
+   FPL Bot.
+   \newblock fplbot: Open source Fantasy Premier League bot.
+   \newblock Retrieved from \url{https://github.com/fplbot}.
+
+\end{thebibliography}
+\cleardoublepage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                               APPENDIX                                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\APPENDIX
+
+\chapter{System Configuration and Installation}
+
+\section{Requirements}
+
+The dashboard requires Python 3.10 and the following packages, installable via pip:
+
+\begin{verbatim}
+pandas==2.1.4
+numpy==1.26.4
+scikit-learn==1.4.2
+pycaret==3.3.2
+autokeras==3.0.0
+tensorflow==2.18.0
+lightgbm==4.6.0
+pulp==3.3.0
+streamlit==1.56.0
+requests
+matplotlib
+\end{verbatim}
+
+\section{Running the Dashboard}
+
+Once dependencies are installed and model files are placed in the \texttt{models/} directory and the feature dataset in \texttt{data/processed/}, the dashboard is launched with:
+
+\begin{verbatim}
+streamlit run src/dashboard.py
+\end{verbatim}
+
+Model files required: \texttt{pycaret\_best\_model.pkl}, \texttt{best\_models.pkl}, \texttt{autokeras\_best\_model.keras}.
+
+\section{Google Colab Training Environment}
+
+Model training was performed on Google Colab using a T4 GPU with runtime version 2025.07 (Python 3.10). PyCaret and AutoKeras were installed in separate runtime sessions due to dependency conflicts. All model artefacts and intermediate predictions were persisted to Google Drive to enable recovery from session disconnections.
+
+\end{document}

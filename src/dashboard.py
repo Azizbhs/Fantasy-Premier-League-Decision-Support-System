@@ -64,7 +64,6 @@ st.markdown("""
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 FPL_BASE     = "https://fantasy.premierleague.com/api/"
-NEXT_GW      = 32
 POSITION_MAP = {0: 'DEF', 1: 'FWD', 2: 'GK', 3: 'MID'}
 POS_COLORS   = {'GK': '#f0a500', 'DEF': '#00b4d8', 'MID': '#7b2ff7', 'FWD': '#ff6b6b'}
 MODEL_DIR    = 'models'
@@ -143,6 +142,23 @@ def match_squad_names(api_names, prediction_names):
 
     return matched
 
+def get_current_gw():
+    try:
+        r = requests.get(FPL_BASE + "bootstrap-static/", timeout=10)
+        r.raise_for_status()
+        events = r.json()['events']
+        for event in events:
+            if event['is_next']:
+                return event['id']
+        # Fallback: find current event
+        for event in events:
+            if event['is_current']:
+                return event['id'] + 1
+    except:
+        pass
+    return 33
+
+NEXT_GW = get_current_gw()
 # ── Load Models ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_models():
