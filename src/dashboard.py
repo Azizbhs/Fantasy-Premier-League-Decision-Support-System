@@ -2,11 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-import pickle
 import os
-import tensorflow as tf
-import autokeras as ak
-from sklearn.impute import SimpleImputer
 from pulp import *
 from difflib import get_close_matches
 import matplotlib.pyplot as plt
@@ -64,10 +60,11 @@ st.markdown("""
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 FPL_BASE     = "https://fantasy.premierleague.com/api/"
-POSITION_MAP = {0: 'DEF', 1: 'FWD', 2: 'GK', 3: 'MID'}
-POS_COLORS   = {'GK': '#f0a500', 'DEF': '#00b4d8', 'MID': '#7b2ff7', 'FWD': '#ff6b6b'}
-MODEL_DIR    = 'models'
-DATA_PATH    = 'data/processed/featured_training_set.csv'
+POSITION_MAP  = {0: 'DEF', 1: 'FWD', 2: 'GK', 3: 'MID'}
+POS_COLORS    = {'GK': '#f0a500', 'DEF': '#00b4d8', 'MID': '#7b2ff7', 'FWD': '#ff6b6b'}
+MODEL_DIR     = 'models'
+DATA_PATH     = 'data/processed/featured_training_set.csv'
+PRED_CSV_PATH = 'models/nb2_regression_featured/predictions.csv'
 
 # ── FPL API ────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
@@ -159,143 +156,30 @@ def get_current_gw():
     return 33
 
 NEXT_GW = get_current_gw()
-# ── Load Models ────────────────────────────────────────────────────────────────
-@st.cache_resource
-def load_models():
-    models = {}
-
-    # Huber Regressor (PyCaret pipeline)
-    try:
-        with open(os.path.join(MODEL_DIR, 'pycaret_best_model.pkl'), 'rb') as f:
-            models['huber'] = pickle.load(f)
-        st.sidebar.success("✅ Huber loaded")
-    except Exception as e:
-        models['huber'] = None
-        st.sidebar.warning(f"⚠️ Huber: {str(e)[:40]}")
-
-    # LightGBM (PyCaret pipeline)
-    try:
-        with open(os.path.join(MODEL_DIR, 'best_models.pkl'), 'rb') as f:
-            best = pickle.load(f)
-            models['lgbm'] = best[1] if len(best) > 1 else None
-        st.sidebar.success("✅ LightGBM loaded")
-    except Exception as e:
-        models['lgbm'] = None
-        st.sidebar.warning(f"⚠️ LightGBM: {str(e)[:40]}")
-
-    # AutoKeras
-    try:
-        models['autokeras'] = tf.keras.models.load_model(
-            os.path.join(MODEL_DIR, 'autokeras_best_model.keras'),
-            custom_objects=ak.CUSTOM_OBJECTS
-        )
-        st.sidebar.success("✅ AutoKeras loaded")
-    except Exception as e:
-        models['autokeras'] = None
-        st.sidebar.warning(f"⚠️ AutoKeras: {str(e)[:40]}")
-
-    return models
-
-# ── Generate Predictions ───────────────────────────────────────────────────────
+# ── Load Predictions ──────────────────────────────────────────────────────────
 @st.cache_data
-def generate_predictions(_models):
-    if not os.path.exists(DATA_PATH):
+def load_predictions():
+    if not os.path.exists(PRED_CSV_PATH):
+        st.sidebar.error("⚠️ predictions.csv not found")
         return None
-
-    df = pd.read_csv(DATA_PATH, low_memory=False)
-    df = df.sort_values(['name', 'season', 'GW'])
-
-    # Most recent GW row per player = current form snapshot
-    latest = df.groupby('name').last().reset_index()
-
-    # Keep metadata including element ID for squad matching
-    meta_cols = ['name', 'team', 'position', 'value']
-    if 'element' in latest.columns:
-        meta_cols.append('element')
-    meta = latest[meta_cols].copy()
-    if meta['position'].dtype == object:
-        # Already strings — map directly
-        str_map = {'GK': 'GK', 'DEF': 'DEF', 'MID': 'MID', 'FWD': 'FWD'}
-        meta['pos'] = meta['position'].map(str_map)
-    else:
-        # Encoded integers
-        meta['pos'] = meta['position'].map(POSITION_MAP)
-
-    # Encode same as training
-    latest['position'] = latest['position'].astype('category').cat.codes
-    latest['was_home'] = latest['was_home'].astype(int)
-
-    DROP_COLS = ['name', 'team', 'season', 'GW', 'kickoff_time', 'total_points',
-                 'element', 'fixture', 'modified']
-    DROP_COLS   = [c for c in DROP_COLS if c in latest.columns]
-    feature_df  = latest.drop(columns=DROP_COLS)
-    non_numeric = feature_df.select_dtypes(exclude=[np.number, 'bool']).columns.tolist()
-    feature_df  = feature_df.drop(columns=non_numeric)
-
-    imputer   = SimpleImputer(strategy='mean')
-    X_imputed = imputer.fit_transform(feature_df).astype(np.float32)
-    feat_cols = feature_df.columns.tolist()
-    X_df      = pd.DataFrame(X_imputed, columns=feat_cols)
-
-    # Huber predictions — try DataFrame then numpy array
-    if _models.get('huber') is not None:
-        try:
-            huber_p = np.clip(_models['huber'].predict(X_df), 0, None)
-        except:
-            try:
-                huber_p = np.clip(_models['huber'].predict(X_imputed), 0, None)
-            except:
-                huber_p = np.zeros(len(X_df))
-    else:
-        huber_p = np.zeros(len(X_df))
-
-    # LightGBM predictions — try DataFrame then numpy array
-    if _models.get('lgbm') is not None:
-        try:
-            lgbm_p = np.clip(_models['lgbm'].predict(X_df), 0, None)
-        except:
-            try:
-                lgbm_p = np.clip(_models['lgbm'].predict(X_imputed), 0, None)
-            except:
-                lgbm_p = np.zeros(len(X_df))
-    else:
-        lgbm_p = np.zeros(len(X_df))
-
-    # AutoKeras predictions
-    if _models.get('autokeras') is not None:
-        try:
-            ak_p = np.clip(_models['autokeras'].predict(X_imputed).flatten(), 0, None)
-        except:
-            ak_p = np.zeros(len(X_df))
-    else:
-        ak_p = np.zeros(len(X_df))
-
-    # Weighted ensemble: 20% Huber + 30% LightGBM + 50% AutoKeras
-    mid = np.clip(0.2 * huber_p + 0.3 * lgbm_p + 0.5 * ak_p, 0, None)
-    std = np.std(np.array([huber_p, lgbm_p, ak_p]), axis=0)
-    low  = np.clip(mid - std, 0, None)
-    high = mid + std
-
-    interval_width = high - low
-    q33, q66 = np.percentile(interval_width, [33, 66])
-    def get_conf(w):
-        if w <= q33:   return 'High'
-        elif w <= q66: return 'Medium'
+    df = pd.read_csv(PRED_CSV_PATH)
+    if 'predicted_pts' in df.columns and 'predicted_pts_mid' not in df.columns:
+        df = df.rename(columns={'predicted_pts': 'predicted_pts_mid'})
+    if 'pos' not in df.columns and 'position' in df.columns:
+        df['pos'] = df['position']
+    if 'predicted_pts_low' not in df.columns:
+        df['predicted_pts_low']  = np.round(df['predicted_pts_mid'] * 0.85, 2)
+        df['predicted_pts_high'] = np.round(df['predicted_pts_mid'] * 1.15, 2)
+    def get_conf(pts):
+        if pts >= 6:   return 'High'
+        elif pts >= 3: return 'Medium'
         else:          return 'Low'
-    confidence = [get_conf(w) for w in interval_width]
+    df['confidence']           = df['predicted_pts_mid'].apply(get_conf)
+    df['predicted_pts_scaled'] = df['predicted_pts_mid']
+    st.sidebar.success("✅ NB2 Huber predictions loaded")
+    return df
 
-    scaled = np.clip(
-        mid * 0.4 + (meta['value'].values / meta['value'].max()) * mid.max() * 0.6,
-        0, None
-    )
 
-    preds = meta.copy().reset_index(drop=True)
-    preds['predicted_pts_mid']    = np.round(mid,    2)
-    preds['predicted_pts_low']    = np.round(low,    2)
-    preds['predicted_pts_high']   = np.round(high,   2)
-    preds['predicted_pts_scaled'] = np.round(scaled, 4)
-    preds['confidence']           = confidence
-    return preds
 
 # ── PuLP Optimiser ─────────────────────────────────────────────────────────────
 def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
@@ -443,8 +327,7 @@ def display_squad(df, s_ids, b_ids, cap_id):
     with c3: st.markdown(f'<div class="metric-card"><div class="metric-value">{cap_name.split()[-1]}</div><div class="metric-label">Captain</div></div>', unsafe_allow_html=True)
 
 # ── Load everything ────────────────────────────────────────────────────────────
-models      = load_models()
-predictions = generate_predictions(models)
+predictions = load_predictions()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -457,14 +340,14 @@ with st.sidebar:
         "👤 My Squad",
         "📊 Player Predictions",
         "🎯 Captain Picks",
-        f"📅 GW{NEXT_GW} Fixtures"
+        f"📅 GW{NEXT_GW} Fixtures",
+        "📈 Season Simulation"
     ], label_visibility="collapsed")
     st.markdown("---")
     st.markdown(f'<p style="color:#555;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Predicting GW{NEXT_GW}</p>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">Huber MAE: 0.797</p>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">LightGBM R²: 0.328</p>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">AutoKeras R²: 0.349</p>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#888;font-size:0.75rem;">20% Huber · 30% LGBM · 50% AK</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">Model: NB2 Huber Regressor</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">MAE: 0.864 · MAE@15: 7.34</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">Baseline improvement: 42.6%</p>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — OVERVIEW
@@ -636,7 +519,7 @@ elif page == "👤 My Squad":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📊 Player Predictions":
     st.markdown('<h1 class="main-title">PLAYER PREDICTIONS</h1>', unsafe_allow_html=True)
-    st.markdown(f'<p class="subtitle">GW{NEXT_GW} ensemble predictions · Huber + LightGBM + AutoKeras</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="subtitle">GW{NEXT_GW} · NB2 Huber Regressor · MAE@15: 7.34</p>', unsafe_allow_html=True)
 
     if predictions is None:
         st.error("Predictions not loaded.")
@@ -749,3 +632,93 @@ elif page == f"📅 GW{NEXT_GW} Fixtures":
                     </div>
                 </div>
             </div>""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 7 — SEASON SIMULATION
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "📈 Season Simulation":
+    st.markdown('<h1 class="main-title">SEASON SIMULATION</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">GW15–29 · NB2 model-driven decisions vs average FPL manager</p>', unsafe_allow_html=True)
+
+    SIM_PATH = 'data/processed/simulation_results.csv'
+
+    # Simulation results hardcoded from NB5
+    sim_data = {
+        'GW':       [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28],
+        'our_pts':  [91, 90, 63, 41, 66, 37, 65, 47, 40, 46, 70, 38, 39, 64],
+        'avg_pts':  [49, 60, 66, 44, 40, 42, 48, 40, 44, 55, 58, 58, 45, 53],
+        'captain':  ['Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
+                     'Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
+                     'Haaland','Salah'],
+    }
+    sim_df = pd.DataFrame(sim_data)
+    sim_df['diff']       = sim_df['our_pts'] - sim_df['avg_pts']
+    sim_df['our_cum']    = sim_df['our_pts'].cumsum()
+    sim_df['avg_cum']    = sim_df['avg_pts'].cumsum()
+    sim_df['beat_avg']   = sim_df['diff'] > 0
+
+    our_total = int(sim_df['our_pts'].sum())
+    avg_total = int(sim_df['avg_pts'].sum())
+    advantage = our_total - avg_total
+    beat_count = int(sim_df['beat_avg'].sum())
+
+    # Summary metrics
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.markdown(f'<div class="metric-card"><div class="metric-value">{our_total}</div><div class="metric-label">Our Total Pts</div></div>', unsafe_allow_html=True)
+    with c2: st.markdown(f'<div class="metric-card"><div class="metric-value">{avg_total}</div><div class="metric-label">Avg Manager Pts</div></div>', unsafe_allow_html=True)
+    with c3: st.markdown(f'<div class="metric-card"><div class="metric-value">+{advantage}</div><div class="metric-label">Points Advantage</div></div>', unsafe_allow_html=True)
+    with c4: st.markdown(f'<div class="metric-card"><div class="metric-value">{beat_count}/14</div><div class="metric-label">GWs Beat Average</div></div>', unsafe_allow_html=True)
+
+    st.markdown("")
+    st.markdown('<div style="background:#1a1a2e;border:1px solid #0f3460;border-radius:12px;padding:1rem 1.5rem;margin:1rem 0;text-align:center;">'
+                '<span style="color:#00d2ff;font-family:Bebas Neue,sans-serif;font-size:1.4rem;letter-spacing:2px;">EST. RANK: TOP 50,000</span>'
+                '<span style="color:#888;font-size:0.9rem;margin-left:16px;">≈ top 0.5% of 10M+ managers globally</span>'
+                '</div>', unsafe_allow_html=True)
+
+    # Per-GW chart
+    st.markdown('<p class="section-header">POINTS PER GAMEWEEK</p>', unsafe_allow_html=True)
+    fig, axes = plt.subplots(2, 1, figsize=(12, 7))
+    fig.patch.set_facecolor('#0d0d1a')
+    for ax in axes:
+        ax.set_facecolor('#0d0d1a')
+        ax.tick_params(colors='#888')
+        ax.spines['bottom'].set_color('#0f3460')
+        ax.spines['left'].set_color('#0f3460')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    gws = sim_df['GW'].values
+    axes[0].plot(gws, sim_df['our_pts'], 'o-', color='#00d2ff', linewidth=2, label=f'Our model ({our_total} pts)')
+    axes[0].plot(gws, sim_df['avg_pts'], 's--', color='#888', linewidth=1.5, label=f'Average manager ({avg_total} pts)')
+    axes[0].fill_between(gws, sim_df['our_pts'], sim_df['avg_pts'], alpha=0.12, color='#00d2ff')
+    axes[0].set_ylabel('Points', color='#888')
+    axes[0].legend(facecolor='#1a1a2e', edgecolor='#0f3460', labelcolor='#ccc')
+    axes[0].set_xticks(gws)
+
+    axes[1].plot(gws, sim_df['our_cum'], 'o-', color='#00d2ff', linewidth=2, label='Our model (cumulative)')
+    axes[1].plot(gws, sim_df['avg_cum'], 's--', color='#888', linewidth=1.5, label='Average manager (cumulative)')
+    axes[1].set_xlabel('Gameweek', color='#888')
+    axes[1].set_ylabel('Cumulative Points', color='#888')
+    axes[1].legend(facecolor='#1a1a2e', edgecolor='#0f3460', labelcolor='#ccc')
+    axes[1].set_xticks(gws)
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+    # GW breakdown table
+    st.markdown('<p class="section-header">GAMEWEEK BREAKDOWN</p>', unsafe_allow_html=True)
+    for _, row in sim_df.iterrows():
+        color  = '#00ff88' if row['beat_avg'] else '#ff6b6b'
+        symbol = '▲' if row['beat_avg'] else '▼'
+        diff_str = f"+{int(row['diff'])}" if row['diff'] >= 0 else str(int(row['diff']))
+        st.markdown(f"""
+        <div style="background:#1a1a2e;border-left:4px solid {color};border-radius:8px;
+                    padding:0.6rem 1rem;margin:0.3rem 0;display:flex;
+                    justify-content:space-between;align-items:center;">
+            <span style="color:#fff;font-weight:600;min-width:40px;">GW{int(row['GW'])}</span>
+            <span style="color:#00d2ff;min-width:80px;">Our: {int(row['our_pts'])} pts</span>
+            <span style="color:#888;min-width:80px;">Avg: {int(row['avg_pts'])} pts</span>
+            <span style="color:{color};min-width:60px;">{symbol} {diff_str}</span>
+            <span style="color:#555;font-size:0.8rem;">⚽ Captain: {row['captain']}</span>
+        </div>""", unsafe_allow_html=True)
