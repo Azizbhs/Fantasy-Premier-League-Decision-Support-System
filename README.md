@@ -74,23 +74,16 @@ pip install -r requirements.txt
 
 > **Note:** PyCaret and AutoKeras have conflicting TensorFlow dependencies. Train them in separate virtual environments or separate Google Colab sessions. The dashboard only requires the saved model files and does not need either library installed.
 
-### 3. Prepare the data
+### 3. Prepare the processed dataset
 
-Download the vaastav dataset for each season from [https://github.com/vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League) and place the CSV files in:
-
-```
-data/raw_historical/    ← 2023/24 and 2024/25 season files
-data/raw_live/          ← 2025/26 season file
-```
-
-Then run the preprocessing pipeline:
+The raw data is already included in the repository under `data/raw_historical/` and `data/raw_live/`. Run the two preprocessing scripts to generate the processed dataset:
 
 ```bash
 python src/filter_data.py
 python src/feature_engineering.py
 ```
 
-This produces `data/processed/final_feature_set.csv`.
+This produces `data/processed/final_feature_set.csv` which is required by the training notebooks.
 
 ### 4. Run the notebooks
 
