@@ -1,0 +1,1 @@
+{"model": "HuberRegressor", "test_mae": 0.8344, "test_r2": 0.2479, "naive_mae": 1.659999966621399}
