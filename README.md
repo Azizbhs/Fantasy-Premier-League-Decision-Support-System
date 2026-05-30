@@ -2,10 +2,6 @@
 
 A Machine Learning-Based Decision Support System for Fantasy Premier League, developed as a Final Degree Project at the Escola Tècnica Superior d'Enginyeria Informàtica (ETSINF), Universitat Politècnica de València.
 
-> **Author:** Ben Hassen, Mohamed Aziz  
-> **Tutor:** Heras Barberà, Stella María  
-> **Academic year:** 2025–2026
-
 ---
 
 ## Overview
@@ -47,7 +43,6 @@ fpl-dss/
 │   ├── nb3_position_models.ipynb          ← Experiment 3: position-specific models
 │   ├── nb4_comparison.ipynb               ← Comparative Evaluation
 │   └── nb5_simulation.ipynb               ← Season Simulation
-├── outputs/                               ← Generated figures (PNG)
 ├── src/
 │   ├── filter_data.py                     ← Season concatenation & preprocessing
 │   ├── feature_engineering.py             ← 27 engineered features
