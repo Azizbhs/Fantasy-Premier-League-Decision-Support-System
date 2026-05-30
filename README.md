@@ -44,6 +44,7 @@ fpl-dss/
 │   ├── nb3_position_models.ipynb          ← Experiment 3: position-specific models
 │   ├── nb4_comparison.ipynb               ← Comparative Evaluation
 │   └── nb5_simulation.ipynb               ← Season Simulation
+├── outputs/
 ├── src/
 │   ├── filter_data.py                     ← Season concatenation & preprocessing
 │   ├── feature_engineering.py             ← 27 engineered features
