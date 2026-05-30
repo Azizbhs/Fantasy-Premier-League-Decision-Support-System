@@ -2,10 +2,6 @@
 
 A Machine Learning-Based Decision Support System for Fantasy Premier League, developed as a Final Degree Project at the Escola Tècnica Superior d'Enginyeria Informàtica (ETSINF), Universitat Politècnica de València.
 
-> **Author:** Ben Hassen, Mohamed Aziz  
-> **Tutor:** Heras Barberà, Stella María  
-> **Academic year:** 2025–2026
-
 ---
 
 ## Overview
