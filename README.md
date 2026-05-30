@@ -11,8 +11,7 @@ This system predicts FPL player points using AutoML and deep learning, selects o
 ---
 
 ## Project Structure
-The structure below reflects the repository after all scripts and notebooks have been run. Files marked with *(generated)* are not included in the repository and are produced by running the data pipeline and notebooks in order.
-
+The structure below reflects the repository after all scripts and notebooks have been run.
 
 ```
 fpl-dss/
