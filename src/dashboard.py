@@ -599,13 +599,24 @@ elif page == f"📅 GW{NEXT_GW} Fixtures":
     bootstrap = fetch_bootstrap()
     fixtures  = fetch_fixtures(NEXT_GW)
 
+    # If no fixtures for NEXT_GW (season over), fall back to GW38
+    fallback = False
+    if bootstrap and not fixtures:
+        fixtures = fetch_fixtures(38)
+        fallback = True
+
     if not bootstrap or not fixtures:
         st.error("Could not load fixtures from FPL API.")
     else:
         team_map = {t['id']: t['name'] for t in bootstrap['teams']}
 
-        st.markdown(f'<p class="section-header">GAMEWEEK {NEXT_GW} FIXTURES</p>', unsafe_allow_html=True)
+        display_gw = 38 if fallback else NEXT_GW
+        st.markdown(f'<p class="section-header">GAMEWEEK {display_gw} FIXTURES</p>', unsafe_allow_html=True)
         st.markdown(f'<p style="color:#888;font-size:0.85rem;">{len(fixtures)} fixtures</p>', unsafe_allow_html=True)
+        if fallback:
+            st.markdown('<div style="background:#1a2e1a;border:1px solid #06D6A0;border-radius:8px;padding:0.6rem 1rem;margin:0.5rem 0;">' +
+                        '<span style="color:#06D6A0;font-size:0.9rem;">ℹ️ The 2025/26 Premier League season has concluded. Showing the final gameweek (GW38) results.</span>' +
+                        '</div>', unsafe_allow_html=True)
         st.markdown("")
 
         for fix in fixtures:
@@ -618,6 +629,12 @@ elif page == f"📅 GW{NEXT_GW} Fixtures":
             def diff_color(d):
                 return {1:'#00ff88', 2:'#00d2ff', 3:'#888', 4:'#ffd700', 5:'#ff6b6b'}.get(d, '#888')
 
+            finished   = fix.get('finished', False)
+            h_score    = fix.get('team_h_score')
+            a_score    = fix.get('team_a_score')
+            score_str  = f"{h_score} – {a_score}" if finished and h_score is not None else "VS"
+            score_color = "#00d2ff" if finished else "#555"
+
             st.markdown(f"""
             <div class="fixture-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -625,7 +642,7 @@ elif page == f"📅 GW{NEXT_GW} Fixtures":
                         <span style="color:#fff;font-weight:600;font-size:1rem;">{home}</span>
                         <span style="color:{diff_color(h_diff)};font-size:0.75rem;margin-left:8px;">FDR {h_diff}</span>
                     </div>
-                    <div style="margin:0 1.5rem;color:#555;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;">VS</div>
+                    <div style="margin:0 1.5rem;color:{score_color};font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;">{score_str}</div>
                     <div style="flex:1;text-align:left;">
                         <span style="color:{diff_color(a_diff)};font-size:0.75rem;margin-right:8px;">FDR {a_diff}</span>
                         <span style="color:#fff;font-weight:600;font-size:1rem;">{away}</span>
