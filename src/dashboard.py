@@ -59,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-FPL_BASE     = "https://fantasy.premierleague.com/api/"
+FPL_BASE      = "https://fantasy.premierleague.com/api/"
 POSITION_MAP  = {0: 'DEF', 1: 'FWD', 2: 'GK', 3: 'MID'}
 POS_COLORS    = {'GK': '#f0a500', 'DEF': '#00b4d8', 'MID': '#7b2ff7', 'FWD': '#ff6b6b'}
 MODEL_DIR     = 'models'
@@ -96,13 +96,10 @@ def fetch_user_squad(fpl_id, gw):
         return picks, itb
     except:
         return None, None
-    
+
 def match_squad_names(api_names, prediction_names):
-    """Match FPL API short names to full names in predictions dataframe."""
     matched = []
     pred_lower = {n.lower(): n for n in prediction_names}
-
-    # Build last-name lookup from predictions
     last_name_map = {}
     for n in prediction_names:
         parts = n.split()
@@ -110,33 +107,20 @@ def match_squad_names(api_names, prediction_names):
             last = parts[-1].lower()
             if last not in last_name_map:
                 last_name_map[last] = n
-
     for api_name in api_names:
         api_lower = api_name.lower().strip()
-
-        # 1. Exact substring match (e.g. "Palmer" in "Cole Palmer")
         exact = [n for n in prediction_names if api_lower in n.lower()]
         if len(exact) == 1:
-            matched.append(exact[0])
-            continue
-
-        # 2. Last name match (e.g. "Leno" → "Bernd Leno")
+            matched.append(exact[0]); continue
         if api_lower in last_name_map:
-            matched.append(last_name_map[api_lower])
-            continue
-
-        # 3. Handle "B.Fernandes" style — extract surname after dot
+            matched.append(last_name_map[api_lower]); continue
         if '.' in api_lower:
             surname = api_lower.split('.')[-1].strip()
             if surname in last_name_map:
-                matched.append(last_name_map[surname])
-                continue
-
-        # 4. Fuzzy match as last resort with higher cutoff
+                matched.append(last_name_map[surname]); continue
         close = get_close_matches(api_lower, list(pred_lower.keys()), n=1, cutoff=0.75)
         if close:
             matched.append(pred_lower[close[0]])
-
     return matched
 
 def get_current_gw():
@@ -147,16 +131,16 @@ def get_current_gw():
         for event in events:
             if event['is_next']:
                 return event['id']
-        # Fallback: find current event
         for event in events:
             if event['is_current']:
                 return event['id'] + 1
     except:
         pass
-    return 33
+    return 38
 
 NEXT_GW = get_current_gw()
-# ── Load Predictions ──────────────────────────────────────────────────────────
+
+# ── Load Predictions ───────────────────────────────────────────────────────────
 @st.cache_data
 def load_predictions():
     if not os.path.exists(PRED_CSV_PATH):
@@ -179,17 +163,15 @@ def load_predictions():
     st.sidebar.success("✅ NB2 Huber predictions loaded")
     return df
 
-
-
 # ── PuLP Optimiser ─────────────────────────────────────────────────────────────
 def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
     players = list(df.index)
-    starter  = LpVariable.dicts('starter',  players, cat='Binary')
-    benched  = LpVariable.dicts('benched',  players, cat='Binary')
-    captain  = LpVariable.dicts('captain',  players, cat='Binary')
-    tin      = LpVariable.dicts('tin',      players, cat='Binary')
-    tout     = LpVariable.dicts('tout',     players, cat='Binary')
-    keep     = LpVariable.dicts('keep',     players, cat='Binary')
+    starter = LpVariable.dicts('starter', players, cat='Binary')
+    benched = LpVariable.dicts('benched', players, cat='Binary')
+    captain = LpVariable.dicts('captain', players, cat='Binary')
+    tin     = LpVariable.dicts('tin',     players, cat='Binary')
+    tout    = LpVariable.dicts('tout',    players, cat='Binary')
+    keep    = LpVariable.dicts('keep',    players, cat='Binary')
 
     prob = LpProblem('FPL', LpMaximize)
     prob += (
@@ -203,7 +185,6 @@ def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
     fwd_idx = [i for i in players if df.loc[i, 'pos'] == 'FWD']
 
     if current_squad is None:
-        # Fresh squad
         for i in players:
             prob += keep[i] == 1
             prob += tin[i]  == 0
@@ -219,23 +200,18 @@ def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
             ci = [i for i in players if df.loc[i, 'team'] == club]
             prob += lpSum(starter[i] + benched[i] for i in ci) <= 3
     else:
-        # Transfer optimisation
         current_names   = set(current_squad)
         current_idx     = [i for i in players if df.loc[i, 'name'] in current_names]
         not_current_idx = [i for i in players if df.loc[i, 'name'] not in current_names]
-
         for i in current_idx:
             prob += keep[i] + tout[i] == 1
         for i in not_current_idx:
             prob += keep[i] == 0
         for i in players:
             prob += tin[i] <= 1 - keep[i]
-
         prob += lpSum(tin[i]  for i in players) <= n_transfers
         prob += lpSum(tout[i] for i in players) <= n_transfers
         prob += lpSum(tin[i]  for i in players) == lpSum(tout[i] for i in players)
-
-        # Position-for-position constraint — transfers in must match position of transfers out
         prob += lpSum(tin[i]  for i in gk_idx)  == lpSum(tout[i] for i in gk_idx)
         prob += lpSum(tin[i]  for i in def_idx) == lpSum(tout[i] for i in def_idx)
         prob += lpSum(tin[i]  for i in mid_idx) == lpSum(tout[i] for i in mid_idx)
@@ -252,7 +228,6 @@ def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
             ci = [i for i in players if df.loc[i, 'team'] == club]
             prob += lpSum(keep[i] + tin[i] for i in ci) <= 3
 
-    # Common constraints
     prob += lpSum(starter[i] for i in players) == 11
     prob += lpSum(benched[i] for i in players) == 4
     prob += lpSum(starter[i] for i in gk_idx)  == 1
@@ -268,9 +243,9 @@ def optimise_squad(df, budget=100.0, current_squad=None, n_transfers=15):
     if LpStatus[prob.status] != 'Optimal':
         return None, None, None, None
 
-    s_ids  = [i for i in players if starter[i].value()  == 1]
-    b_ids  = [i for i in players if benched[i].value()  == 1]
-    cap_id = [i for i in players if captain[i].value()  == 1][0]
+    s_ids  = [i for i in players if starter[i].value() == 1]
+    b_ids  = [i for i in players if benched[i].value() == 1]
+    cap_id = [i for i in players if captain[i].value() == 1][0]
     t_in   = [df.loc[i, 'name'] for i in players if tin[i].value()  == 1]
     t_out  = [df.loc[i, 'name'] for i in players if tout[i].value() == 1]
 
@@ -284,7 +259,7 @@ def pos_badge(pos):
 def display_squad(df, s_ids, b_ids, cap_id):
     s11   = df.loc[s_ids].copy()
     bench = df.loc[b_ids].copy()
-    s11['role']   = 'Starter'
+    s11['role'] = 'Starter'
     s11.loc[cap_id, 'role'] = 'Captain'
     bench['role'] = 'Bench'
 
@@ -334,7 +309,7 @@ with st.sidebar:
     st.markdown('<p class="main-title" style="font-size:2rem;">FPL DSS</p>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Decision Support System</p>', unsafe_allow_html=True)
     st.markdown("---")
-    page = st.radio("Nav", [
+    _nav_options = [
         "🏠 Overview",
         f"🏆 Best Squad — GW{NEXT_GW}",
         "👤 My Squad",
@@ -342,7 +317,10 @@ with st.sidebar:
         "🎯 Captain Picks",
         f"📅 GW{NEXT_GW} Fixtures",
         "📈 Season Simulation"
-    ], label_visibility="collapsed")
+    ]
+    _default = st.session_state.pop("nav", "🏠 Overview")
+    _idx = _nav_options.index(_default) if _default in _nav_options else 0
+    page = st.radio("Nav", _nav_options, index=_idx, label_visibility="collapsed")
     st.markdown("---")
     st.markdown(f'<p style="color:#555;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Predicting GW{NEXT_GW}</p>', unsafe_allow_html=True)
     st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">Model: NB2 Huber Regressor</p>', unsafe_allow_html=True)
@@ -350,56 +328,63 @@ with st.sidebar:
     st.markdown('<p style="color:#00d2ff;font-size:0.85rem;">Baseline improvement: 42.6%</p>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE 1 — OVERVIEW
+# PAGE 1 — HOME
 # ══════════════════════════════════════════════════════════════════════════════
 if page == "🏠 Overview":
     st.markdown('<h1 class="main-title">FPL DECISION SUPPORT</h1>', unsafe_allow_html=True)
-    st.markdown(f'<p class="subtitle">GW{NEXT_GW} Predictions · AutoML · Mathematical Optimisation · 2023–2026</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Stop guessing. Start winning.</p>', unsafe_allow_html=True)
     st.markdown("")
 
-    n_players = len(predictions) if predictions is not None else 0
+    st.markdown('''
+    <div style="background:#1a1a2e;border:1px solid #0f3460;border-radius:12px;padding:1.5rem 2rem;margin:1rem 0;">
+        <p style="color:#ccc;font-size:1.05rem;line-height:1.8;margin:0;">
+            Fantasy Premier League is played by over <span style="color:#00d2ff;font-weight:600;">10 million managers</span> worldwide.
+            Most rely on gut feeling, recency bias, and community hype to make decisions.
+            This system replaces intuition with a <span style="color:#00d2ff;font-weight:600;">data-driven pipeline</span> —
+            predicting each player's expected points using three years of historical data,
+            then selecting the mathematically optimal squad using <span style="color:#00d2ff;font-weight:600;">integer linear programming</span>.
+        </p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    st.markdown("")
+    st.markdown('<p class="section-header">WHAT CAN YOU DO HERE?</p>', unsafe_allow_html=True)
+    features = [
+        ("🏆", "Find the Best Squad", "See the mathematically optimal 15-player squad within the £100m budget for the upcoming gameweek."),
+        ("👤", "Import Your Squad", "Enter your FPL team ID and get personalised transfer recommendations and captaincy picks."),
+        ("📊", "Explore Predictions", "Browse all 820 players ranked by predicted score. Filter by position, price, and confidence."),
+        ("🎯", "Pick Your Captain", "See the top 10 captaincy candidates with their double-points projections."),
+        ("📈", "See the Simulation", "Watch how a model-driven manager performed over GW15–29, beating the average by +95 points."),
+    ]
+    c1, c2 = st.columns(2)
+    for i, (icon, title, desc) in enumerate(features):
+        col = c1 if i % 2 == 0 else c2
+        with col:
+            st.markdown(f'''
+            <div style="background:#1a1a2e;border:1px solid #0f3460;border-radius:10px;
+                        padding:1rem 1.2rem;margin:0.4rem 0;display:flex;align-items:flex-start;gap:1rem;">
+                <span style="font-size:1.6rem;">{icon}</span>
+                <div>
+                    <div style="color:#00d2ff;font-weight:600;font-size:0.95rem;margin-bottom:0.3rem;">{title}</div>
+                    <div style="color:#888;font-size:0.85rem;line-height:1.5;">{desc}</div>
+                </div>
+            </div>''', unsafe_allow_html=True)
+
+    st.markdown("")
+    st.markdown('<p class="section-header">BY THE NUMBERS</p>', unsafe_allow_html=True)
+    n_players = len(predictions) if predictions is not None else 820
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.markdown(f'<div class="metric-card"><div class="metric-value">{n_players}</div><div class="metric-label">Players Tracked</div></div>', unsafe_allow_html=True)
-    with c2: st.markdown('<div class="metric-card"><div class="metric-value">3</div><div class="metric-label">Seasons of Data</div></div>', unsafe_allow_html=True)
-    with c3: st.markdown('<div class="metric-card"><div class="metric-value">0.797</div><div class="metric-label">Best MAE (Huber)</div></div>', unsafe_allow_html=True)
-    with c4: st.markdown('<div class="metric-card"><div class="metric-value">45%</div><div class="metric-label">vs Naive Baseline</div></div>', unsafe_allow_html=True)
+    with c2: st.markdown('<div class="metric-card"><div class="metric-value">79,277</div><div class="metric-label">Training Observations</div></div>', unsafe_allow_html=True)
+    with c3: st.markdown('<div class="metric-card"><div class="metric-value">+95 pts</div><div class="metric-label">Advantage vs Avg Manager</div></div>', unsafe_allow_html=True)
+    with c4: st.markdown('<div class="metric-card"><div class="metric-value">Top 0.5%</div><div class="metric-label">Estimated Global Rank</div></div>', unsafe_allow_html=True)
 
     st.markdown("")
-    st.markdown('<p class="section-header">MODEL COMPARISON</p>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    mnames = ['Huber\nRegressor', 'LightGBM', 'AutoKeras\nNeural Net', 'Naive\nBaseline']
-    maes   = [0.797, 0.930, 0.904, 1.448]
-    r2s    = [0.239, 0.328, 0.349]
-    cm     = ['#00d2ff', '#00ff88', '#f0a500', '#444']
-
-    with c1:
-        fig, ax = plt.subplots(figsize=(5, 3.5))
-        fig.patch.set_facecolor('#1a1a2e'); ax.set_facecolor('#1a1a2e')
-        bars = ax.bar(mnames, maes, color=cm, width=0.5, edgecolor='none')
-        ax.set_title('MAE — Lower is Better', color='white', fontsize=11, pad=10)
-        ax.tick_params(colors='#888', labelsize=8); ax.spines[:].set_visible(False)
-        ax.yaxis.grid(True, color='#222', linewidth=0.5); ax.set_axisbelow(True)
-        for bar, val in zip(bars, maes):
-            ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.01, f'{val:.3f}', ha='center', va='bottom', color='white', fontsize=8)
-        plt.tight_layout(); st.pyplot(fig); plt.close()
-
-    with c2:
-        fig, ax = plt.subplots(figsize=(5, 3.5))
-        fig.patch.set_facecolor('#1a1a2e'); ax.set_facecolor('#1a1a2e')
-        bars = ax.bar(mnames[:3], r2s, color=cm[:3], width=0.5, edgecolor='none')
-        ax.set_title('R² — Higher is Better', color='white', fontsize=11, pad=10)
-        ax.tick_params(colors='#888', labelsize=8); ax.spines[:].set_visible(False)
-        ax.yaxis.grid(True, color='#222', linewidth=0.5); ax.set_axisbelow(True)
-        for bar, val in zip(bars, r2s):
-            ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.003, f'{val:.3f}', ha='center', va='bottom', color='white', fontsize=8)
-        plt.tight_layout(); st.pyplot(fig); plt.close()
-
-    st.markdown('<p class="section-header">PIPELINE</p>', unsafe_allow_html=True)
-    steps = [("📥","Data Engineering","3 seasons · vaastav"),("⚙️","Feature Engineering","15+ features"),("🤖","AutoML","PyCaret + AutoKeras"),("🧮","Optimisation","PuLP · Knapsack"),("📊","Dashboard","Streamlit · Live FPL")]
-    cols  = st.columns(5)
-    for col, (icon, title, desc) in zip(cols, steps):
-        with col:
-            st.markdown(f'<div class="metric-card" style="padding:1rem;"><div style="font-size:1.8rem;">{icon}</div><div style="color:#fff;font-weight:600;font-size:0.85rem;margin:0.3rem 0;">{title}</div><div style="color:#666;font-size:0.75rem;">{desc}</div></div>', unsafe_allow_html=True)
+    st.markdown('<p class="section-header">GET STARTED</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#888;font-size:0.9rem;margin-bottom:1rem;">Import your FPL squad and get your personalised transfer recommendations in seconds.</p>', unsafe_allow_html=True)
+    if st.button("🚀  Import My Squad & Get Recommendations", use_container_width=True):
+        st.session_state["nav"] = "👤 My Squad"
+        st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — BEST SQUAD
@@ -429,15 +414,14 @@ elif page == "👤 My Squad":
     c1, c2 = st.columns([1, 2])
     with c1:
         st.markdown('<p class="section-header" style="font-size:1.2rem;">IMPORT</p>', unsafe_allow_html=True)
-        # Text input — no annoying +/- buttons
-        fpl_id_str     = st.text_input("Your FPL Team ID", value="", placeholder="e.g. 3187370",
-                                        help="Find in FPL app under Points — it's in the URL")
-        wildcard       = st.checkbox("Wildcard")
+        fpl_id_str = st.text_input("Your FPL Team ID", value="", placeholder="e.g. 3187370",
+                                    help="Find in FPL app under Points — it's in the URL")
+        wildcard = st.checkbox("Wildcard")
         if not wildcard:
             n_ft = st.number_input("Free Transfers", min_value=1, max_value=15, value=1, step=1)
         else:
             n_ft = 15
-        fetch_btn      = st.button("🔍 Import & Optimise", type="primary")
+        fetch_btn = st.button("🔍 Import & Optimise", type="primary")
 
     with c2:
         if fetch_btn:
@@ -459,15 +443,13 @@ elif page == "👤 My Squad":
                     if bootstrap is None:
                         st.error("Could not reach FPL API.")
                     else:
-                        # Build element ID → our player name map
                         if 'element' in predictions.columns:
                             elem_to_name = dict(zip(predictions['element'].astype(int), predictions['name']))
                             squad_names  = [elem_to_name[pid] for pid in picks if pid in elem_to_name]
                         else:
-                            # Fallback to name matching if element column not available
-                            id_to_name   = {p['id']: p['web_name'] for p in bootstrap['elements']}
-                            api_names    = [id_to_name.get(pid, '') for pid in picks if id_to_name.get(pid)]
-                            squad_names  = match_squad_names(api_names, predictions['name'].tolist())
+                            id_to_name  = {p['id']: p['web_name'] for p in bootstrap['elements']}
+                            api_names   = [id_to_name.get(pid, '') for pid in picks if id_to_name.get(pid)]
+                            squad_names = match_squad_names(api_names, predictions['name'].tolist())
                         current_df   = predictions[predictions['name'].isin(squad_names)]
                         total_budget = current_df['value'].sum() + itb
                         n_transfers  = n_ft
@@ -512,7 +494,6 @@ elif page == "👤 My Squad":
 
                             st.markdown('<p class="section-header" style="font-size:1.2rem;margin-top:1.5rem;">OPTIMISED STARTING XI</p>', unsafe_allow_html=True)
                             display_squad(predictions, s_ids, b_ids, cap_id)
-    
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 4 — PLAYER PREDICTIONS
@@ -608,31 +589,29 @@ elif page == f"📅 GW{NEXT_GW} Fixtures":
     if not bootstrap or not fixtures:
         st.error("Could not load fixtures from FPL API.")
     else:
-        team_map = {t['id']: t['name'] for t in bootstrap['teams']}
-
+        team_map   = {t['id']: t['name'] for t in bootstrap['teams']}
         display_gw = 38 if fallback else NEXT_GW
+
         st.markdown(f'<p class="section-header">GAMEWEEK {display_gw} FIXTURES</p>', unsafe_allow_html=True)
         st.markdown(f'<p style="color:#888;font-size:0.85rem;">{len(fixtures)} fixtures</p>', unsafe_allow_html=True)
         if fallback:
-            st.markdown('<div style="background:#1a2e1a;border:1px solid #06D6A0;border-radius:8px;padding:0.6rem 1rem;margin:0.5rem 0;">' +
-                        '<span style="color:#06D6A0;font-size:0.9rem;">ℹ️ The 2025/26 Premier League season has concluded. Showing the final gameweek (GW38) results.</span>' +
-                        '</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="background:#1a2e1a;border:1px solid #06D6A0;border-radius:8px;padding:0.6rem 1rem;margin:0.5rem 0;">'
+                '<span style="color:#06D6A0;font-size:0.9rem;">ℹ️ The 2025/26 Premier League season has concluded. Showing the final gameweek (GW38) results.</span>'
+                '</div>', unsafe_allow_html=True)
         st.markdown("")
 
         for fix in fixtures:
             home = team_map.get(fix['team_h'], 'Unknown')
             away = team_map.get(fix['team_a'], 'Unknown')
-
-            # Difficulty colors
             h_diff = fix.get('team_h_difficulty', 3)
             a_diff = fix.get('team_a_difficulty', 3)
             def diff_color(d):
                 return {1:'#00ff88', 2:'#00d2ff', 3:'#888', 4:'#ffd700', 5:'#ff6b6b'}.get(d, '#888')
-
-            finished   = fix.get('finished', False)
-            h_score    = fix.get('team_h_score')
-            a_score    = fix.get('team_a_score')
-            score_str  = f"{h_score} – {a_score}" if finished and h_score is not None else "VS"
+            finished    = fix.get('finished', False)
+            h_score     = fix.get('team_h_score')
+            a_score     = fix.get('team_a_score')
+            score_str   = f"{h_score} – {a_score}" if finished and h_score is not None else "VS"
             score_color = "#00d2ff" if finished else "#555"
 
             st.markdown(f"""
@@ -657,29 +636,25 @@ elif page == "📈 Season Simulation":
     st.markdown('<h1 class="main-title">SEASON SIMULATION</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">GW15–29 · NB2 model-driven decisions vs average FPL manager</p>', unsafe_allow_html=True)
 
-    SIM_PATH = 'data/processed/simulation_results.csv'
-
-    # Simulation results hardcoded from NB5
     sim_data = {
-        'GW':       [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28],
-        'our_pts':  [91, 90, 63, 41, 66, 37, 65, 47, 40, 46, 70, 38, 39, 64],
-        'avg_pts':  [49, 60, 66, 44, 40, 42, 48, 40, 44, 55, 58, 58, 45, 53],
-        'captain':  ['Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
-                     'Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
-                     'Haaland','Salah'],
+        'GW':      [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28],
+        'our_pts': [91, 90, 63, 41, 66, 37, 65, 47, 40, 46, 70, 38, 39, 64],
+        'avg_pts': [49, 60, 66, 44, 40, 42, 48, 40, 44, 55, 58, 58, 45, 53],
+        'captain': ['Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
+                    'Haaland','Haaland','Haaland','Haaland','Haaland','Haaland',
+                    'Haaland','Salah'],
     }
     sim_df = pd.DataFrame(sim_data)
-    sim_df['diff']       = sim_df['our_pts'] - sim_df['avg_pts']
-    sim_df['our_cum']    = sim_df['our_pts'].cumsum()
-    sim_df['avg_cum']    = sim_df['avg_pts'].cumsum()
-    sim_df['beat_avg']   = sim_df['diff'] > 0
+    sim_df['diff']     = sim_df['our_pts'] - sim_df['avg_pts']
+    sim_df['our_cum']  = sim_df['our_pts'].cumsum()
+    sim_df['avg_cum']  = sim_df['avg_pts'].cumsum()
+    sim_df['beat_avg'] = sim_df['diff'] > 0
 
-    our_total = int(sim_df['our_pts'].sum())
-    avg_total = int(sim_df['avg_pts'].sum())
-    advantage = our_total - avg_total
+    our_total  = int(sim_df['our_pts'].sum())
+    avg_total  = int(sim_df['avg_pts'].sum())
+    advantage  = our_total - avg_total
     beat_count = int(sim_df['beat_avg'].sum())
 
-    # Summary metrics
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.markdown(f'<div class="metric-card"><div class="metric-value">{our_total}</div><div class="metric-label">Our Total Pts</div></div>', unsafe_allow_html=True)
     with c2: st.markdown(f'<div class="metric-card"><div class="metric-value">{avg_total}</div><div class="metric-label">Avg Manager Pts</div></div>', unsafe_allow_html=True)
@@ -687,12 +662,12 @@ elif page == "📈 Season Simulation":
     with c4: st.markdown(f'<div class="metric-card"><div class="metric-value">{beat_count}/14</div><div class="metric-label">GWs Beat Average</div></div>', unsafe_allow_html=True)
 
     st.markdown("")
-    st.markdown('<div style="background:#1a1a2e;border:1px solid #0f3460;border-radius:12px;padding:1rem 1.5rem;margin:1rem 0;text-align:center;">'
-                '<span style="color:#00d2ff;font-family:Bebas Neue,sans-serif;font-size:1.4rem;letter-spacing:2px;">EST. RANK: TOP 50,000</span>'
-                '<span style="color:#888;font-size:0.9rem;margin-left:16px;">≈ top 0.5% of 10M+ managers globally</span>'
-                '</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="background:#1a1a2e;border:1px solid #0f3460;border-radius:12px;padding:1rem 1.5rem;margin:1rem 0;text-align:center;">'
+        '<span style="color:#00d2ff;font-family:Bebas Neue,sans-serif;font-size:1.4rem;letter-spacing:2px;">EST. RANK: TOP 50,000</span>'
+        '<span style="color:#888;font-size:0.9rem;margin-left:16px;">≈ top 0.5% of 10M+ managers globally</span>'
+        '</div>', unsafe_allow_html=True)
 
-    # Per-GW chart
     st.markdown('<p class="section-header">POINTS PER GAMEWEEK</p>', unsafe_allow_html=True)
     fig, axes = plt.subplots(2, 1, figsize=(12, 7))
     fig.patch.set_facecolor('#0d0d1a')
@@ -723,11 +698,10 @@ elif page == "📈 Season Simulation":
     st.pyplot(fig)
     plt.close()
 
-    # GW breakdown table
     st.markdown('<p class="section-header">GAMEWEEK BREAKDOWN</p>', unsafe_allow_html=True)
     for _, row in sim_df.iterrows():
-        color  = '#00ff88' if row['beat_avg'] else '#ff6b6b'
-        symbol = '▲' if row['beat_avg'] else '▼'
+        color    = '#00ff88' if row['beat_avg'] else '#ff6b6b'
+        symbol   = '▲' if row['beat_avg'] else '▼'
         diff_str = f"+{int(row['diff'])}" if row['diff'] >= 0 else str(int(row['diff']))
         st.markdown(f"""
         <div style="background:#1a1a2e;border-left:4px solid {color};border-radius:8px;
